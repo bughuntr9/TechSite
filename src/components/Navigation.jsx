@@ -1,6 +1,6 @@
 function Navigation() {
   return (
-    <nav className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-6xl px-5">
+    <nav className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-7xl px-6">
       <div className="bg-white/85 backdrop-blur-lg border border-slate-200/20 rounded-2xl px-7 py-4 flex justify-between items-center shadow-lg">
         <div className="text-xl font-bold text-slate-900">
           TechStaff Pro

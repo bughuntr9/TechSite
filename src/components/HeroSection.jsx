@@ -1,8 +1,72 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+// Counter Hook for animated counting
+const useCounter = (end, duration = 2000, shouldStart = false) => {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!shouldStart) {
+      setCount(0)
+      return
+    }
+
+    let startTime = null
+    const startValue = 0
+    const endValue = parseInt(end.toString().replace(/[^\d]/g, ''))
+
+    const animate = (currentTime) => {
+      if (startTime === null) startTime = currentTime
+      const progress = Math.min((currentTime - startTime) / duration, 1)
+      
+      // Easing function for smooth animation
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4)
+      const current = startValue + (endValue - startValue) * easeOutQuart
+      
+      setCount(Math.floor(current))
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate)
+      }
+    }
+    
+    requestAnimationFrame(animate)
+  }, [end, duration, shouldStart])
+
+  // Format the count back to original format
+  const formatCount = (num) => {
+    const original = end.toString()
+    if (original.includes('+')) return `${num}+`
+    if (original.includes('%')) return `${num}%`
+    if (original.includes('hrs')) return `${num}hrs`
+    if (original.includes('/')) return original.replace(/\d+/, num)
+    return num.toString()
+  }
+
+  return formatCount(count)
+}
+
+// Animated Counter Component
+const AnimatedStat = ({ number, label, shouldAnimate, delay = 0 }) => {
+  const animatedNumber = useCounter(number, 1500, shouldAnimate)
+
+  return (
+    <motion.div 
+      className="bg-white/60 backdrop-blur-md border border-slate-200/50 rounded-2xl px-6 py-4 text-center"
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay }}
+      whileHover={{ scale: 1.05 }}
+    >
+      <div className="text-2xl font-bold text-slate-900">{animatedNumber}</div>
+      <div className="text-sm text-slate-600">{label}</div>
+    </motion.div>
+  )
+}
+
 function HeroSection() {
   const [currentService, setCurrentService] = useState(0)
+  const [animateStats, setAnimateStats] = useState(false)
 
   const services = [
     {
@@ -30,6 +94,28 @@ function HeroSection() {
   ]
 
   const currentData = services[currentService]
+
+  // Handle service change and trigger animation
+  const handleServiceChange = (serviceIndex) => {
+    if (serviceIndex !== currentService) {
+      setAnimateStats(false) // Reset animation
+      setCurrentService(serviceIndex)
+      
+      // Trigger animation after a short delay to allow content to change
+      setTimeout(() => {
+        setAnimateStats(true)
+      }, 300)
+    }
+  }
+
+  // Trigger initial animation on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAnimateStats(true)
+    }, 800)
+    
+    return () => clearTimeout(timer)
+  }, [])
 
   // Shuffle function
   const shuffle = (array) => {
@@ -105,7 +191,7 @@ function HeroSection() {
     };
 
     return (
-      <div className="grid grid-cols-4 grid-rows-4 h-[400px] gap-2">
+      <div className="grid grid-cols-4 grid-rows-4 h-[450px] w-[450px] gap-2">
         {squares.map((sq) => sq)}
       </div>
     );
@@ -113,12 +199,12 @@ function HeroSection() {
 
   return (
     <div className="min-h-screen flex items-center justify-center pt-20 relative overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-6 w-full">
         
         {/* Service Toggle Tabs */}
         <div className="flex gap-4 justify-center mb-12">
           <button 
-            onClick={() => setCurrentService(0)}
+            onClick={() => handleServiceChange(0)}
             className={`px-6 py-3 rounded-xl font-semibold transition-all ${
               currentService === 0 
                 ? 'bg-slate-900 text-white shadow-lg' 
@@ -128,7 +214,7 @@ function HeroSection() {
             IT Staffing
           </button>
           <button 
-            onClick={() => setCurrentService(1)}
+            onClick={() => handleServiceChange(1)}
             className={`px-6 py-3 rounded-xl font-semibold transition-all ${
               currentService === 1 
                 ? 'bg-indigo-600 text-white shadow-lg' 
@@ -139,10 +225,10 @@ function HeroSection() {
           </button>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="flex flex-col lg:flex-row gap-12 items-center">
           
           {/* Left Side - Content */}
-          <div className="text-center lg:text-left">
+          <div className="flex-1 text-center lg:text-left lg:max-w-2xl">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentService}
@@ -194,27 +280,23 @@ function HeroSection() {
                   </motion.button>
                 </div>
                 
-                {/* Stats */}
+                {/* Stats with Animation */}
                 <div className="flex flex-col sm:flex-row gap-6 justify-center lg:justify-start">
                   {currentData.stats.map((stat, index) => (
-                    <motion.div 
-                      key={index}
-                      className="bg-white/60 backdrop-blur-md border border-slate-200/50 rounded-2xl px-6 py-4 text-center"
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.1 }}
-                      whileHover={{ scale: 1.05 }}
-                    >
-                      <div className="text-2xl font-bold text-slate-900">{stat.number}</div>
-                      <div className="text-sm text-slate-600">{stat.label}</div>
-                    </motion.div>
+                    <AnimatedStat
+                      key={`${currentService}-${index}`}
+                      number={stat.number}
+                      label={stat.label}
+                      shouldAnimate={animateStats}
+                      delay={index * 0.1}
+                    />
                   ))}
                 </div>
               </motion.div>
             </AnimatePresence>
           </div>
 
-          {/* Right Side - Shuffling Grid (stays the same for both services) */}
+          {/* Right Side - Shuffling Grid */}
           <div className="flex items-center justify-center">
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
