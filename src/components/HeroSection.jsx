@@ -67,6 +67,12 @@ const AnimatedStat = ({ number, label, shouldAnimate, delay = 0 }) => {
 function HeroSection() {
   const [currentService, setCurrentService] = useState(0)
   const [animateStats, setAnimateStats] = useState(false)
+  const [isScrollLocked, setIsScrollLocked] = useState(false)
+  const heroRef = useRef(null)
+  const lastScrollTimeRef = useRef(0)
+  const scrollCooldownRef = useRef(false)
+  const scrollAttemptCountRef = useRef(0)
+  const lastTransitionTimeRef = useRef(0)
 
   const services = [
     {
@@ -97,7 +103,7 @@ function HeroSection() {
 
   // Handle service change and trigger animation
   const handleServiceChange = (serviceIndex) => {
-    if (serviceIndex !== currentService) {
+    if (serviceIndex !== currentService && serviceIndex >= 0 && serviceIndex < services.length) {
       setAnimateStats(false) // Reset animation
       setCurrentService(serviceIndex)
       
@@ -105,8 +111,95 @@ function HeroSection() {
       setTimeout(() => {
         setAnimateStats(true)
       }, 300)
+
+      // Set cooldown period and track transition time
+      scrollCooldownRef.current = true
+      lastTransitionTimeRef.current = Date.now()
+      scrollAttemptCountRef.current = 0 // Reset scroll attempt counter
+      
+      setTimeout(() => {
+        scrollCooldownRef.current = false
+      }, 3000)
     }
   }
+
+  // Check if hero section is fully visible
+  const isHeroFullyVisible = () => {
+    if (!heroRef.current) return false
+    
+    const rect = heroRef.current.getBoundingClientRect()
+    const windowHeight = window.innerHeight
+    
+    // Hero is fully visible if its top is at or above 0 and bottom is at or below window height
+    return rect.top <= 0 && rect.bottom >= windowHeight
+  }
+
+  // Handle scroll events
+  useEffect(() => {
+    const handleScroll = (e) => {
+      if (!isHeroFullyVisible()) return
+      
+      const now = Date.now()
+      const timeSinceLastTransition = now - lastTransitionTimeRef.current
+      const deltaY = e.deltaY || e.detail || e.wheelDelta
+      
+      // Check if we should allow normal scrolling ONLY for scroll-down on second service
+      const shouldAllowNormalScrollDown = (
+        deltaY > 0 && // Only for scroll-down
+        currentService === 1 && (
+          // 2 seconds have passed since last transition
+          timeSinceLastTransition > 2000 ||
+          // OR user has made 2+ consecutive scroll down attempts
+          scrollAttemptCountRef.current >= 2
+        )
+      )
+      
+      // If escape conditions are met for scroll-down, allow normal scrolling
+      if (shouldAllowNormalScrollDown) {
+        return // Let the browser handle normal scrolling
+      }
+      
+      // Otherwise, prevent default scroll behavior when hero is fully visible
+      e.preventDefault()
+      
+      // Check if we're in general cooldown period (for service transitions)
+      if (scrollCooldownRef.current) return
+      
+      const timeSinceLastScroll = now - lastScrollTimeRef.current
+      
+      // Throttle scroll events (minimum 500ms between transitions)
+      if (timeSinceLastScroll < 500) return
+      
+      lastScrollTimeRef.current = now
+      
+      if (deltaY > 0) {
+        // Scrolling down
+        if (currentService === 0) {
+          // Move from IT Staffing to IT Services
+          handleServiceChange(1)
+        } else {
+          // Already on IT Services - count scroll attempts for escape mechanism
+          scrollAttemptCountRef.current += 1
+        }
+      } else if (deltaY < 0) {
+        // Scrolling up - ALWAYS allow transitions back to previous service
+        if (currentService === 1) {
+          handleServiceChange(0)
+          // Reset scroll attempts when going back
+          scrollAttemptCountRef.current = 0
+        }
+      }
+    }
+
+    // Add scroll event listeners
+    window.addEventListener('wheel', handleScroll, { passive: false })
+    window.addEventListener('DOMMouseScroll', handleScroll, { passive: false }) // Firefox
+
+    return () => {
+      window.removeEventListener('wheel', handleScroll)
+      window.removeEventListener('DOMMouseScroll', handleScroll)
+    }
+  }, [currentService])
 
   // Trigger initial animation on mount
   useEffect(() => {
@@ -135,28 +228,32 @@ function HeroSection() {
     return array;
   };
 
-  // Image data for the cards
-  const imageData = [
-    { id: 1, src: '/images/1.png', bg: '#e2e8f0' },
-    { id: 2, src: '/images/2.png', bg: '#ddd6fe' },
-    { id: 3, src: '/images/3.png', bg: '#fce7f3' },
-    { id: 4, src: '/images/4.png', bg: '#dcfce7' },
-    { id: 5, src: '/images/5.png', bg: '#fef3c7' },
-    { id: 6, src: '/images/6.png', bg: '#e0f2fe' },
-    { id: 7, src: '/images/7.png', bg: '#fee2e2' },
-    { id: 8, src: '/images/8.png', bg: '#f3e8ff' },
-    { id: 9, src: '/images/9.png', bg: '#ecfdf5' },
-    { id: 10, src: '/images/10.png', bg: '#fff7ed' },
-    { id: 11, src: '/images/11.png', bg: '#eff6ff' },
-    { id: 12, src: '/images/12.png', bg: '#fdf4ff' },
-    { id: 13, src: '/images/13.png', bg: '#f0fdf4' },
-    { id: 14, src: '/images/14.png', bg: '#fffbeb' },
-    { id: 15, src: '/images/15.png', bg: '#fef2f2' },
-    { id: 16, src: '/images/16.png', bg: '#f8fafc' }
-  ];
+  // Image data for the cards - switches based on current service
+  const getImageData = (serviceIndex) => {
+    const folder = serviceIndex === 0 ? 'staffing' : 'services';
+    return [
+      { id: 1, src: `/images/${folder}/1.png`, bg: '#e2e8f0' },
+      { id: 2, src: `/images/${folder}/2.png`, bg: '#ddd6fe' },
+      { id: 3, src: `/images/${folder}/3.png`, bg: '#fce7f3' },
+      { id: 4, src: `/images/${folder}/4.png`, bg: '#dcfce7' },
+      { id: 5, src: `/images/${folder}/5.png`, bg: '#fef3c7' },
+      { id: 6, src: `/images/${folder}/6.png`, bg: '#e0f2fe' },
+      { id: 7, src: `/images/${folder}/7.png`, bg: '#fee2e2' },
+      { id: 8, src: `/images/${folder}/8.png`, bg: '#f3e8ff' },
+      { id: 9, src: `/images/${folder}/9.png`, bg: '#ecfdf5' },
+      { id: 10, src: `/images/${folder}/10.png`, bg: '#fff7ed' },
+      { id: 11, src: `/images/${folder}/11.png`, bg: '#eff6ff' },
+      { id: 12, src: `/images/${folder}/12.png`, bg: '#fdf4ff' },
+      { id: 13, src: `/images/${folder}/13.png`, bg: '#f0fdf4' },
+      { id: 14, src: `/images/${folder}/14.png`, bg: '#fffbeb' },
+      { id: 15, src: `/images/${folder}/15.png`, bg: '#fef2f2' },
+      { id: 16, src: `/images/${folder}/16.png`, bg: '#f8fafc' }
+    ];
+  };
 
   const generateSquares = () => {
-    return shuffle(imageData).map((sq) => (
+    const currentImageData = getImageData(currentService);
+    return shuffle(currentImageData).map((sq) => (
       <motion.div
         key={sq.id}
         layout
@@ -184,6 +281,11 @@ function HeroSection() {
       return () => clearTimeout(timeoutRef.current);
     }, []);
 
+    // Regenerate squares when service changes
+    useEffect(() => {
+      setSquares(generateSquares());
+    }, [currentService]);
+
     const shuffleSquares = () => {
       setSquares(generateSquares());
 
@@ -198,31 +300,23 @@ function HeroSection() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center pt-20 relative overflow-hidden">
+    <div ref={heroRef} className="min-h-screen flex items-center justify-center pt-20 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 w-full">
         
-        {/* Service Toggle Tabs */}
-        <div className="flex gap-4 justify-center mb-12">
-          <button 
-            onClick={() => handleServiceChange(0)}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              currentService === 0 
-                ? 'bg-slate-900 text-white shadow-lg' 
-                : 'bg-white/70 backdrop-blur-md border border-slate-200/20 text-slate-700 hover:bg-white/90'
-            }`}
-          >
-            IT Staffing
-          </button>
-          <button 
-            onClick={() => handleServiceChange(1)}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              currentService === 1 
-                ? 'bg-indigo-600 text-white shadow-lg' 
-                : 'bg-white/70 backdrop-blur-md border border-slate-200/20 text-slate-700 hover:bg-white/90'
-            }`}
-          >
-            IT Services
-          </button>
+        {/* Slide Indicators */}
+        <div className="fixed right-8 top-1/2 transform -translate-y-1/2 z-20 flex flex-col gap-4">
+          {services.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => handleServiceChange(index)}
+              className={`transition-all duration-300 rounded-full border-2 hover:scale-110 ${
+                currentService === index
+                  ? 'w-4 h-4 bg-gradient-to-r from-teal-500 to-green-500 border-white shadow-lg'
+                  : 'w-3 h-3 bg-white/30 border-white/50 hover:bg-white/50'
+              }`}
+              aria-label={`Go to ${services[index].title.split('\n')[0]}`}
+            />
+          ))}
         </div>
 
         <div className="flex flex-col lg:flex-row gap-12 items-center">
